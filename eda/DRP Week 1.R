@@ -1,26 +1,26 @@
 library("tidyverse")
 library("baseballr")
 
-my_pitching <- function(name, stat, start, end){
- dates <- seq.Date(as.Date(start), as.Date(end), by = 7)
- date_grid <- tibble(start_date = dates, end_date = dates + 6)
- pitcher_data <- purrr::map2_df(.x = date_grid$start_date,
-                                .y = date_grid$end_date,
-                                ~bref_daily_pitcher(.x, .y))
+# my_pitching <- function(name, stat, start, end){
+#  dates <- seq.Date(as.Date(start), as.Date(end), by = 7)
+#  date_grid <- tibble(start_date = dates, end_date = dates + 6)
+#  pitcher_data <- purrr::map2_df(.x = date_grid$start_date,
+#                                 .y = date_grid$end_date,
+#                                 ~bref_daily_pitcher(.x, .y))
+# #   pitcher_data <- bref_daily_pitcher(start, end)
+# #   stat_df <- filter(pitcher_data, Name == name)
+# #   return(select(stat_df, stat)[[1]])
+# }
+# 
+# my_pitching("Max Scherzer", "WHIP", "2021-06-01", "2021-06-30")
+# 
+# my_pitching2 <- function(name, stat, start, end){
 #   pitcher_data <- bref_daily_pitcher(start, end)
 #   stat_df <- filter(pitcher_data, Name == name)
-#   return(select(stat_df, stat)[[1]])
-}
-
-my_pitching("Max Scherzer", "WHIP", "2021-06-01", "2021-06-30")
-
-my_pitching2 <- function(name, stat, start, end){
-  pitcher_data <- bref_daily_pitcher(start, end)
-  stat_df <- filter(pitcher_data, Name == name)
-  return(suppressWarnings(select(stat_df, stat)[[1]]))
-}
-
-my_pitching2("Max Scherzer", "WHIP", "2021-06-01", "2021-06-30")
+#   return(suppressWarnings(select(stat_df, stat)[[1]]))
+# }
+# 
+# my_pitching2("Max Scherzer", "WHIP", "2021-06-01", "2021-06-30")
 
 my_statcast <- function(first, last, start, end){
   player_id <- playerid_lookup(last, first) %>%

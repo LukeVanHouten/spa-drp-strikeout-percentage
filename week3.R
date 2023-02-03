@@ -2,11 +2,11 @@ library("tidyverse")
 library("baseballr")
 
 granular_data <- function(first, last, data_year){
-    player_id <- playerid_lookup(last, first)
+    # player_id <- playerid_lookup(last, first)
     statcast_data <- 
         statcast_search_pitchers(paste0(as.character(data_year), "-03-28"),
                                  paste0(as.character(data_year), "-11-30"),
-                                 player_id$mlbam_id[[1]]) %>%
+                                 623149) %>%
         select(game_date, release_speed, player_name, events, stand, p_throws, 
                type, pfx_x, pfx_z, effective_speed, at_bat_number, 
                pitch_number) %>%
@@ -17,7 +17,7 @@ granular_data <- function(first, last, data_year){
         ungroup() %>%
         mutate(total_pitches = 1:n()) %>%
         relocate(total_pitches, .after=total_game_pitches)
-    fangraphs_data <- fg_pitcher_game_logs(player_id$fangraphs_id[[1]], 
+    fangraphs_data <- fg_pitcher_game_logs(13892, 
                                            year=data_year) %>%
         select(Date, Pitches, pLI, inLI, gmLI, exLI) %>%
         arrange(Date) %>%
