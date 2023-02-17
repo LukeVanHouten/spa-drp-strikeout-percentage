@@ -49,17 +49,13 @@ joined_df <- merge(sql_platoon_s_k_df, names_df, by.x='pitcher', by.y='key_mlbam
 
 df_train_features <- joined_df %>% 
     subset(game_year != 2021) %>%
-    select(strike_percentage, platoon_advantage, velo_max, velo_iqr, 
-           vertical_movement_max, vertical_movement_iqr, 
-           horizontal_movement_max, horizontal_movement_iqr)
+    select(-pitcher, -game_year, -name, -strikeout_percentage)
 df_train_labels <- joined_df %>% 
     subset(game_year != 2021) %>%
     select(strikeout_percentage)
 df_test_features <- joined_df %>% 
     subset(game_year == 2021) %>%
-    select(strike_percentage, platoon_advantage, velo_max, velo_iqr, 
-           vertical_movement_max, vertical_movement_iqr, 
-           horizontal_movement_max, horizontal_movement_iqr)
+    select(-pitcher, -game_year, -name, -strikeout_percentage)
 df_test_labels <- joined_df %>% 
     subset(game_year == 2021) %>%
     select(strikeout_percentage)
@@ -72,19 +68,15 @@ test_labels <- data.matrix(df_test_labels)
 model <- xgboost(
     data = train_features,
     label = train_labels,
-    nround = 20,
-    verbose = FALSE
+    eta = 0.05,
+    max_depth = 10,
+    nrounds = 100,
+    colsample_bytree = 0.8,
+    verbose = TRUE
 )
 
-explainer <- shapr(train_features, model)
-p <- mean(train_labels)
+plot(model$evaluation_log$iter, model$evaluation_log$train_rmse)
 
-# explanation <- explain(
-#     test_features,
-#     approach = "empirical",
-#     explainer = explainer,
-#     prediction_zero = p
-# )
+pred <- predict(model, test_features)
 
-# Decomposition failed?
-# Also need to remove couple of rows with N/A values
+xgboost_mae <- mean(abs(pred - df_test_labels$strikeout_percentage))
