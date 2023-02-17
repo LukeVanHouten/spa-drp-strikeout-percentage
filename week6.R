@@ -51,8 +51,7 @@ df_train_features <- joined_df %>%
     subset(game_year != 2021) %>%
     select(strike_percentage, platoon_advantage, velo_max, velo_iqr, 
            vertical_movement_max, vertical_movement_iqr, 
-           horizontal_movement_max, horizontal_movement_iqr) %>%
-    na.omit()
+           horizontal_movement_max, horizontal_movement_iqr)
 df_train_labels <- joined_df %>% 
     subset(game_year != 2021) %>%
     select(strikeout_percentage)
