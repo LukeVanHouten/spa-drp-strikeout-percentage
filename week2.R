@@ -15,12 +15,12 @@ conn <- dbConnect(RSQLite::SQLite(),  dbname = "data/lahman_1871-2021.sqlite")
 dbListTables(conn)
 
 ## List the fields in a table
-table_name <- 'AllstarFull'
+table_name <- 'People'
 dbListFields(conn, table_name)
 
 ## Let's get the full batting table
 query <- '
-SELECT * FROM Batting
+SELECT * FROM Fielding
 '
 df <- dbGetQuery(conn, query)
 View(df)

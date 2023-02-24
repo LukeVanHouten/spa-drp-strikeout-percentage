@@ -9,6 +9,8 @@ conn <- DBI::dbConnect(RPostgres::Postgres(), dbname = "drpstatcast",
                        host = "localhost", port = 5432, user = "postgres",
                        password = "drppassword")
 
+connn <- dbConnect(RSQLite::SQLite(),  dbname = "data/lahman_1871-2021.sqlite")
+
 sql_df <- dbGetQuery(conn, read_file("week5.sql"))
 
 platoon_s_k_query <- "
