@@ -105,6 +105,7 @@ train_labels <- data.matrix(df_train_labels)
 test_features <- data.matrix(df_test_features)
 test_labels <- data.matrix(df_test_labels)
 
+
 model <- xgboost(
     data = train_features,
     label = train_labels,
@@ -118,3 +119,4 @@ model <- xgboost(
 pred <- predict(model, test_features)
 
 xgboost_mae <- mean(abs(pred - df_test_labels$strikeout_percentage))
+print(xgboost_mae)
