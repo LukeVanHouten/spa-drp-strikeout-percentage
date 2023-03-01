@@ -4,7 +4,6 @@ library(RSQLite)
 library(tidyverse)
 library(baseballr)
 library(xgboost)
-library(shapr)
 
 conn <- dbConnect(Postgres(), dbname = "drpstatcast", host = "localhost",
                   port = 5432, user = "postgres", password = "drppassword")
@@ -53,11 +52,14 @@ AND game_date NOT BETWEEN '2017-03-28' AND '2017-04-01'
 
 more_stats_df <- dbGetQuery(conn, more_stats_query)
 
-strike_platoon_df <- more_stats_df %>%
-    select(pitcher, game_year, stand, p_throws, type) %>%
+first_batter_platoon_df <- more_stats_df %>%
+    select(game_date, pitcher, game_year, stand, p_throws, at_bat_number) %>%
+    group_by(game_date, pitcher, game_year) %>%
+    slice_min(at_bat_number) %>%
+    slice_head(n = 1) %>%
     group_by(pitcher, game_year) %>%
-    summarize(platoon_advantage = sum(stand == p_throws) / n(),
-              strike_percentage = sum(type != "B") / n())
+    summarize(first_batter_platoon_advantage = sum(stand == p_throws) / n())
+View(first_batter_platoon_df)
 
 strikeout_df <- more_stats_df %>%
     select(game_date, pitcher, events, game_year, at_bat_number) %>%
@@ -69,12 +71,15 @@ strikeout_df <- more_stats_df %>%
     group_by(pitcher, game_year) %>%
     summarize(strikeout_percentage = sum(strikeouts_game) / sum(at_bats_game))
 
-pitch_games_count_df <- more_stats_df %>%
-    group_by(pitcher, game_year) %>%
+strikes_pitches_games_df <- more_stats_df %>%
+    select(game_date, pitcher, game_year, p_throws, type) %>%
+    group_by(pitcher, game_year, p_throws) %>%
     summarize(pitch_count = n(), games = n_distinct(game_date), 
-              pitches_per_game = pitch_count / games)
+              pitches_per_game = pitch_count / games,
+              strike_percentage = sum(type != "B") / n())
 
-joined_df <- merge(merge(merge(strike_platoon_df, pitch_games_count_df,
+joined_df <- merge(merge(merge(first_batter_platoon_df, 
+                               strikes_pitches_games_df,
                                by = c("pitcher", "game_year"), all.x = TRUE),
                          strikeout_df, by = c("pitcher", "game_year"),
                          all.x = TRUE), sql_df, by = c("pitcher", "game_year"),
@@ -82,20 +87,19 @@ joined_df <- merge(merge(merge(strike_platoon_df, pitch_games_count_df,
 
 named_joined_df <- right_join(joined_df, names_df, by="pitcher") %>%
     select(-POS) %>%
-    filter(pitch_count < 1000, games != 1, pitches_per_game < 45)
-View(named_joined_df)
+    filter(pitch_count < 1000, games > 3, pitches_per_game < 45)
 
 df_train_features <- named_joined_df %>% 
     subset(game_year != 2021) %>%
     select(-pitcher, -game_year, -name, -strikeout_percentage, -pitch_count, 
-           -games, -pitches_per_game)
+           -games, -pitches_per_game, -p_throws)
 df_train_labels <- named_joined_df %>% 
     subset(game_year != 2021) %>%
     select(strikeout_percentage)
 df_test_features <- named_joined_df %>% 
     subset(game_year == 2021) %>%
     select(-pitcher, -game_year, -name, -strikeout_percentage, -pitch_count, 
-           -games, -pitches_per_game)
+           -games, -pitches_per_game, -p_throws)
 df_test_labels <- named_joined_df %>% 
     subset(game_year == 2021) %>%
     select(strikeout_percentage)
@@ -126,7 +130,7 @@ for (row in 1:nrow(params)){
         eta = this_eta,
         nrounds = this_nrounds,
         max_depth = this_max_depth,
-        colsample_bytree= this_colsample_bytree,
+        colsample_bytree = this_colsample_bytree,
         verbose = FALSE
     )
     pred <- predict(this_model, test_features)
