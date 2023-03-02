@@ -4,6 +4,7 @@ library(RSQLite)
 library(tidyverse)
 library(baseballr)
 library(xgboost)
+library(mclust)
 
 conn <- dbConnect(Postgres(), dbname = "drpstatcast", host = "localhost",
                   port = 5432, user = "postgres", password = "drppassword")
@@ -42,7 +43,8 @@ names_df <- merge(positions_df, id_df, by.x="bbrefID", by.y="key_bbref") %>%
 colnames(names_df) <- c("POS", "name", "pitcher")
 
 more_stats_query <- "
-SELECT game_date, pitcher, events, type, game_year, stand, p_throws, at_bat_number
+SELECT game_date, pitcher, events, type, game_year, stand, p_throws, 
+   at_bat_number, release_speed, pfx_x, pfx_z
 FROM statcast
 WHERE game_date NOT BETWEEN '2021-03-01' AND '2021-03-31'
 AND game_date NOT BETWEEN '2015-03-28' AND '2015-04-04'
@@ -59,7 +61,6 @@ first_batter_platoon_df <- more_stats_df %>%
     slice_head(n = 1) %>%
     group_by(pitcher, game_year) %>%
     summarize(first_batter_platoon_advantage = sum(stand == p_throws) / n())
-View(first_batter_platoon_df)
 
 strikeout_df <- more_stats_df %>%
     select(game_date, pitcher, events, game_year, at_bat_number) %>%
@@ -78,46 +79,55 @@ strikes_pitches_games_df <- more_stats_df %>%
               pitches_per_game = pitch_count / games,
               strike_percentage = sum(type != "B") / n())
 
-joined_df <- merge(merge(merge(first_batter_platoon_df, 
-                               strikes_pitches_games_df,
+clusters_df <- read.csv("clustered_pitches.csv")
+
+joined_df <- merge(merge(merge(merge(first_batter_platoon_df,
+                                     strikes_pitches_games_df,
+                                     by = c("pitcher", "game_year"),
+                                     all.x = TRUE), strikeout_df,
                                by = c("pitcher", "game_year"), all.x = TRUE),
-                         strikeout_df, by = c("pitcher", "game_year"),
-                         all.x = TRUE), sql_df, by = c("pitcher", "game_year"),
-                   all.x = TRUE)
+                         sql_df, by = c("pitcher", "game_year"), all.x = TRUE), 
+                   clusters_df, by = c("pitcher", "game_year"), all.x = TRUE)
 
 named_joined_df <- right_join(joined_df, names_df, by="pitcher") %>%
     select(-POS) %>%
     filter(pitch_count < 1000, games > 3, pitches_per_game < 45)
 
-df_train_features <- named_joined_df %>% 
+less_features_df <- named_joined_df %>%
+    select(-vertical_release_max, -vertical_release_range,
+           -vertical_release_iqr, -horizontal_release_max, 
+           -horizontal_release_range, -horizontal_release_iqr,
+           -release_spin_rate_max, -release_spin_rate_min,
+           -release_spin_rate_range, -release_spin_rate_iqr)
+
+df_train_features <- less_features_df %>% 
     subset(game_year != 2021) %>%
-    select(-pitcher, -game_year, -name, -strikeout_percentage, -pitch_count, 
-           -games, -pitches_per_game, -p_throws)
-df_train_labels <- named_joined_df %>% 
+    select(-pitcher, -name, -pitch_count, -games, -pitches_per_game, -p_throws,
+           -strikeout_percentage, -game_year)
+df_train_labels <- less_features_df %>% 
     subset(game_year != 2021) %>%
     select(strikeout_percentage)
-df_test_features <- named_joined_df %>% 
+df_test_features <- less_features_df %>% 
     subset(game_year == 2021) %>%
-    select(-pitcher, -game_year, -name, -strikeout_percentage, -pitch_count, 
-           -games, -pitches_per_game, -p_throws)
-df_test_labels <- named_joined_df %>% 
+    select(-pitcher, -name, -pitch_count, -games, -pitches_per_game, -p_throws,
+           -strikeout_percentage, -game_year)
+test_labels <- less_features_df %>% 
     subset(game_year == 2021) %>%
     select(strikeout_percentage)
 
 train_features <- data.matrix(df_train_features)
 train_labels <- data.matrix(df_train_labels)
 test_features <- data.matrix(df_test_features)
-test_labels <- data.matrix(df_test_labels)
 
 etas <- c(0.05, 0.1, 0.15, 0.2)
 nroundss <- c(50, 100, 200, 250)
 max_depths <- c(2, 4, 6, 10)
 colsample_bytrees <- c(0.5, 0.7, 0.8, 1)
 
-
 params <- expand.grid(list(eta = etas, nrounds = nroundss, max_depth = 
                            max_depths, colsample_bytree = colsample_bytrees))
-best_mae <- 10
+
+best_mae <- 1
 
 for (row in 1:nrow(params)){
     this_eta <- params[row, "eta"]
@@ -134,7 +144,7 @@ for (row in 1:nrow(params)){
         verbose = FALSE
     )
     pred <- predict(this_model, test_features)
-    mae <- mean(abs(pred - df_test_labels$strikeout_percentage))
+    mae <- mean(abs(pred - test_labels$strikeout_percentage))
     if (mae < best_mae){
         best_mae <- mae
         best_param_row <- row
