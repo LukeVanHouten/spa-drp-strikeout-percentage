@@ -17,7 +17,7 @@ positions_query <- "
 SELECT playerID, yearID, POS
 FROM Fielding
 WHERE yearID BETWEEN 2015 AND 2019 OR
-yearID == 2021
+   yearID == 2021
 GROUP BY playerID, POS
 "
 
@@ -110,30 +110,38 @@ df_train_features <- less_features_df %>%
     subset(!(game_year %in% c(2019, 2021))) %>%
     select(-pitcher, -name, -pitch_count, -games, -pitches_per_game, -p_throws,
            -strikeout_percentage, -game_year)
-df_train_labels <- less_features_df %>%
+df_train_label <- less_features_df %>%
     subset(!(game_year %in% c(2019, 2021))) %>%
     select(strikeout_percentage)
 df_test_features <- less_features_df %>% 
     subset(game_year %in% c(2019, 2021)) %>%
     select(-pitcher, -name, -pitch_count, -games, -pitches_per_game, -p_throws,
            -strikeout_percentage, -game_year)
-test_labels <- less_features_df %>% 
+test_label <- less_features_df %>% 
     subset(game_year %in% c(2019, 2021)) %>%
-    select(name, p_throws, game_year, strikeout_percentage, pitch_count, games, 
-           pitches_per_game)
+    select(name, p_throws, game_year, pitch_count, games, pitches_per_game,
+           strikeout_percentage)
 
 train_features <- data.matrix(df_train_features)
-train_labels <- data.matrix(df_train_labels)
+train_label <- data.matrix(df_train_labels)
 test_features <- data.matrix(df_test_features)
 
 etas <- c(0.05, 0.1, 0.15, 0.2)
 nroundss <- c(50, 100, 200, 250)
-max_depths <- c(2, 4, 6, 10)
+max_depths <- c(2, 4, 6)
 colsample_bytrees <- c(0.5, 0.7, 0.8, 1)
+# subsamples <- c(0.1, 0.5, 0.9)
+# min_child_weights <- c(0, 1, 10)
+lambdas <- c(0.001, 0.1, 0.5, 0.9)
 
 params <- expand.grid(list(eta = etas, nrounds = nroundss, 
                            max_depth = max_depths, 
-                           colsample_bytree = colsample_bytrees))
+                           colsample_bytree = colsample_bytrees,
+                           # min_child_weight = min_child_weights,
+                           # subsample = subsamples
+                           lambda = lambdas)) %>%
+    mutate(mae = NA)
+
 best_mae <- 1
 
 for (row in 1:nrow(params)){
@@ -141,33 +149,39 @@ for (row in 1:nrow(params)){
     this_nrounds <- params[row, "nrounds"]
     this_max_depth <- params[row, "max_depth"]
     this_colsample_bytree <- params[row, "colsample_bytree"]
+    # this_subsample <- params[row, "subsample"]
+    # this_min_child_weight <- params[row, "min_child_weight"]
+    this_lambda <- params[row, "lambda"]
     model <- xgboost(
         data = train_features,
-        label = train_labels,
+        label = train_label,
         eta = this_eta,
         nrounds = this_nrounds,
         max_depth = this_max_depth,
         colsample_bytree = this_colsample_bytree,
+        # subsample = this_subsample,
+        # min_child_weight = this_min_child_weight,
+        lambda = this_lambda,
         verbose = FALSE
     )
     pred <- predict(model, test_features)
-    mae <- mean(abs(pred - test_labels$strikeout_percentage))
+    mae <- mean(abs(pred - test_label$strikeout_percentage))
+    params[row, "mae"] <- mae
     if (mae < best_mae){
         best_mae <- mae
-        best_param_row <- row
+        best_param_row <- params[row, ]
         best_pred <- pred
         best_model <- model
     }
 }
 
-print(params[best_param_row, ])
+print(best_param_row)
 
-prediction_vs_actual_df <- test_labels %>%
+prediction_vs_actual_df <- test_label %>%
     mutate(strikeout_percentage_pred = best_pred) %>%
     mutate(absolute_error = abs(strikeout_percentage - 
                                 strikeout_percentage_pred)) %>%
     arrange(absolute_error)
-View(prediction_vs_actual_df)
 
 error_plot <- ggplot(prediction_vs_actual_df, aes(x=1:length(absolute_error), 
                                                   y=absolute_error)) +
