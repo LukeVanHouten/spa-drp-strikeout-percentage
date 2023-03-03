@@ -2,7 +2,6 @@ library(DBI)
 library(RPostgres)
 library(RSQLite)
 library(tidyverse)
-library(baseballr)
 library(xgboost)
 library(mclust)
 
@@ -13,7 +12,7 @@ connn <- dbConnect(SQLite(),  dbname = "data/lahman_1871-2021.sqlite")
 
 sql_df <- dbGetQuery(conn, read_file("week5.sql"))
 
-id_df <- read.csv("player_ids.csv")
+id_df <- read.csv("players_pos.csv")
 
 positions_query <- "
 SELECT playerID, yearID, POS
@@ -40,7 +39,7 @@ names_df <- merge(positions_df, id_df, by.x="bbrefID", by.y="key_bbref") %>%
     select(-bbrefID) %>%
     filter(POS == "P")
 
-colnames(names_df) <- c("POS", "name", "pitcher")
+colnames(names_df) <- c("POS", "name", "pitcher", "key_fangraphs")
 
 more_stats_query <- "
 SELECT game_date, pitcher, events, type, game_year, stand, p_throws, 
@@ -83,35 +82,47 @@ clusters_df <- read.csv("clustered_pitches.csv")
 
 joined_df <- merge(merge(merge(merge(first_batter_platoon_df,
                                      strikes_pitches_games_df,
-                                     by = c("pitcher", "game_year"),
-                                     all.x = TRUE), strikeout_df,
-                               by = c("pitcher", "game_year"), all.x = TRUE),
-                         sql_df, by = c("pitcher", "game_year"), all.x = TRUE), 
-                   clusters_df, by = c("pitcher", "game_year"), all.x = TRUE)
+                                     by=c("pitcher", "game_year"),
+                                     all.x=TRUE), strikeout_df,
+                               by = c("pitcher", "game_year"), all.x=TRUE),
+                         sql_df, by = c("pitcher", "game_year"), all.x=TRUE),
+                   clusters_df, by = c("pitcher", "game_year"), all.x=TRUE)
 
 named_joined_df <- right_join(joined_df, names_df, by="pitcher") %>%
     select(-POS) %>%
     filter(pitch_count < 1000, games > 3, pitches_per_game < 45)
 
-less_features_df <- named_joined_df %>%
-    select(-vertical_release_max, -vertical_release_range,
+li_df <- read.csv("li.csv")
+
+all_features_df <- merge(named_joined_df, li_df, 
+                         by.x=c("key_fangraphs", "game_year"), 
+                         by.y=c("playerid", "season"), all.x=TRUE)
+
+less_features_df <- all_features_df %>%
+    select(-key_fangraphs, -vertical_release_max, -vertical_release_range,
            -vertical_release_iqr, -horizontal_release_max, 
            -horizontal_release_range, -horizontal_release_iqr,
            -release_spin_rate_max, -release_spin_rate_min,
-           -release_spin_rate_range, -release_spin_rate_iqr)
+           -release_spin_rate_range, -release_spin_rate_iqr) %>%
+    na.omit() %>%
+    filter(mean_gmLI != 0)
 
 df_train_features <- less_features_df %>% 
+    # subset(!(game_year %in% c(2019, 2021))) %>%
     subset(game_year != 2021) %>%
     select(-pitcher, -name, -pitch_count, -games, -pitches_per_game, -p_throws,
            -strikeout_percentage, -game_year)
-df_train_labels <- less_features_df %>% 
+df_train_labels <- less_features_df %>%
+    # subset(!(game_year %in% c(2019, 2021))) %>%
     subset(game_year != 2021) %>%
     select(strikeout_percentage)
 df_test_features <- less_features_df %>% 
+    # subset(game_year %in% c(2019, 2021)) %>%
     subset(game_year == 2021) %>%
     select(-pitcher, -name, -pitch_count, -games, -pitches_per_game, -p_throws,
            -strikeout_percentage, -game_year)
 test_labels <- less_features_df %>% 
+    # subset(game_year %in% c(2019, 2021)) %>%
     subset(game_year == 2021) %>%
     select(strikeout_percentage)
 
@@ -148,8 +159,9 @@ for (row in 1:nrow(params)){
     if (mae < best_mae){
         best_mae <- mae
         best_param_row <- row
+        best_pred <- pred
     }
 }
 
-print(best_mae)
 print(params[best_param_row, ])
+print(best_pred)
