@@ -3,7 +3,6 @@ library(RPostgres)
 library(RSQLite)
 library(tidyverse)
 library(xgboost)
-library(mclust)
 
 conn <- dbConnect(Postgres(), dbname = "drpstatcast", host = "localhost",
                   port = 5432, user = "postgres", password = "drppassword")
@@ -90,41 +89,38 @@ joined_df <- merge(merge(merge(merge(first_batter_platoon_df,
 
 named_joined_df <- right_join(joined_df, names_df, by="pitcher") %>%
     select(-POS) %>%
-    filter(pitch_count < 1000, games > 3, pitches_per_game < 45)
+    filter(pitch_count < 1000, games >= 4, pitches_per_game < 45)
 
 li_df <- read.csv("li.csv")
 
 all_features_df <- merge(named_joined_df, li_df, 
                          by.x=c("key_fangraphs", "game_year"), 
-                         by.y=c("playerid", "season"), all.x=TRUE)
-
-less_features_df <- all_features_df %>%
-    select(-key_fangraphs, -vertical_release_max, -vertical_release_range,
-           -vertical_release_iqr, -horizontal_release_max, 
-           -horizontal_release_range, -horizontal_release_iqr,
-           -release_spin_rate_max, -release_spin_rate_min,
-           -release_spin_rate_range, -release_spin_rate_iqr) %>%
+                         by.y=c("playerid", "season"), all.x=TRUE) %>%
+    select(-key_fangraphs) %>%
     na.omit() %>%
     filter(mean_gmLI != 0)
 
+less_features_df <- all_features_df %>%
+    select(-release_spin_rate_range, -vertical_release_range,
+           -vertical_release_iqr, -horizontal_release_max,
+           -horizontal_release_range, -horizontal_release_iqr,
+           -vertical_movement_range, -horizontal_movement_range)
+
 df_train_features <- less_features_df %>% 
-    # subset(!(game_year %in% c(2019, 2021))) %>%
-    subset(game_year != 2021) %>%
+    subset(!(game_year %in% c(2019, 2021))) %>%
     select(-pitcher, -name, -pitch_count, -games, -pitches_per_game, -p_throws,
            -strikeout_percentage, -game_year)
 df_train_labels <- less_features_df %>%
-    # subset(!(game_year %in% c(2019, 2021))) %>%
-    subset(game_year != 2021) %>%
+    subset(!(game_year %in% c(2019, 2021))) %>%
     select(strikeout_percentage)
 df_test_features <- less_features_df %>% 
-    # subset(game_year %in% c(2019, 2021)) %>%
-    subset(game_year == 2021) %>%
+    subset(game_year %in% c(2019, 2021)) %>%
     select(-pitcher, -name, -pitch_count, -games, -pitches_per_game, -p_throws,
            -strikeout_percentage, -game_year)
 test_labels <- less_features_df %>% 
-    # subset(game_year %in% c(2019, 2021)) %>%
-    subset(game_year == 2021) %>%
-    select(strikeout_percentage)
+    subset(game_year %in% c(2019, 2021)) %>%
+    select(name, p_throws, game_year, strikeout_percentage, pitch_count, games, 
+           pitches_per_game)
 
 train_features <- data.matrix(df_train_features)
 train_labels <- data.matrix(df_train_labels)
@@ -135,9 +131,9 @@ nroundss <- c(50, 100, 200, 250)
 max_depths <- c(2, 4, 6, 10)
 colsample_bytrees <- c(0.5, 0.7, 0.8, 1)
 
-params <- expand.grid(list(eta = etas, nrounds = nroundss, max_depth = 
-                           max_depths, colsample_bytree = colsample_bytrees))
-
+params <- expand.grid(list(eta = etas, nrounds = nroundss, 
+                           max_depth = max_depths, 
+                           colsample_bytree = colsample_bytrees))
 best_mae <- 1
 
 for (row in 1:nrow(params)){
@@ -145,7 +141,7 @@ for (row in 1:nrow(params)){
     this_nrounds <- params[row, "nrounds"]
     this_max_depth <- params[row, "max_depth"]
     this_colsample_bytree <- params[row, "colsample_bytree"]
-    this_model <- xgboost(
+    model <- xgboost(
         data = train_features,
         label = train_labels,
         eta = this_eta,
@@ -154,14 +150,38 @@ for (row in 1:nrow(params)){
         colsample_bytree = this_colsample_bytree,
         verbose = FALSE
     )
-    pred <- predict(this_model, test_features)
+    pred <- predict(model, test_features)
     mae <- mean(abs(pred - test_labels$strikeout_percentage))
     if (mae < best_mae){
         best_mae <- mae
         best_param_row <- row
         best_pred <- pred
+        best_model <- model
     }
 }
 
 print(params[best_param_row, ])
-print(best_pred)
+
+prediction_vs_actual_df <- test_labels %>%
+    mutate(strikeout_percentage_pred = best_pred) %>%
+    mutate(absolute_error = abs(strikeout_percentage - 
+                                strikeout_percentage_pred)) %>%
+    arrange(absolute_error)
+View(prediction_vs_actual_df)
+
+error_plot <- ggplot(prediction_vs_actual_df, aes(x=1:length(absolute_error), 
+                                                  y=absolute_error)) +
+    geom_line() +
+    theme(axis.title.x = element_blank())
+
+importance_df <- as.data.frame(xgb.importance(colnames(df_train_features), 
+                                              model = best_model)) %>%
+    select(Feature, Gain) %>%
+    arrange(Gain)
+importance_df$Feature <- factor(importance_df$Feature, 
+                                levels = importance_df$Feature)
+
+importance_plot <- ggplot(tail(importance_df, 10), aes(Gain, Feature)) +
+    geom_point() +
+    scale_x_continuous(breaks = seq(0, 0.2, 0.01)) +
+    labs(title="XGBoost Model Feature Importance (Top 10)")
