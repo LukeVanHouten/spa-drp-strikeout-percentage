@@ -1,8 +1,8 @@
 library(tidyverse)
 library(baseballr)
 
-id_df <- read.csv("players_pos.csv")
-pitchers_df <- read.csv("relief_pitchers.csv")
+id_df <- read.csv("Data/players_pos.csv")
+pitchers_df <- read.csv("Data/relief_pitchers.csv")
 
 pitcher_ids_df <- merge(id_df, pitchers_df, by.x="key_mlbam", by.y="pitcher") %>%
     mutate(id_year = paste0(game_year, "_", key_fangraphs)) %>%
@@ -39,4 +39,4 @@ li_train_df <- map_df(.x = pitchers_train_df$id_year,
 
 li_df <- rbind(li_train_df, li_2021_df)
 
-write.csv(li_df, "li.csv", row.names=FALSE)
+write.csv(li_df, "Data/li.csv", row.names=FALSE)

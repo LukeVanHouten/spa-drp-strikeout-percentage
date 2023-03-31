@@ -1,4 +1,9 @@
-# baseball_drp
-Baseball Analytics DRP W2023
+# Predicting Strikeout Percentage for Relief Pitchers Based on MLB Pitch Data
 
-You may need to install Jupyter notebooks and the R kernel for Jupyter.
+
+### Luke VanHouten
+### Baseball Analytics DRP 
+### Winter2023
+
+## Context and Setup
+This project is to predict the strikeout percentage of pitchers given information about the pitches they throw as well as the contexts of when they are thrown.

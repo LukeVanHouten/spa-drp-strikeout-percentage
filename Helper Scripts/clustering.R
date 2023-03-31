@@ -22,14 +22,13 @@ standardize <- function(x){
     (x - min(x)) / diff(range(x))
 }
 
-standardized_df <- cbind(select(pitch_data_df, pitcher, game_year), 
+standardized_df <- cbind(select(pitch_data_df, pitcher, game_year),
                          data.frame(lapply(select(pitch_data_df, -pitcher, 
                                                   -game_year), standardize)))
-standardized_df <- head(standardized_df, 50)
 
 clustered_df <- standardized_df %>%
     group_by(pitcher, game_year) %>%
     summarize(clusters = n_distinct(Mclust(as.data.frame(release_speed, pfx_x, 
                                                          pfx_z))$classification))
 
-# write.csv(clustered_df, "clustered_pitches.csv", row.names=FALSE)
+write.csv(clustered_df, "Data/clustered_pitches.csv", row.names=FALSE)

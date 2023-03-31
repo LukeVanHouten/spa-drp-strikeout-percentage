@@ -1,8 +1,8 @@
 library(tidyverse)
 
-all_pitchers <- read.csv("clustered_pitches.csv")
+all_pitchers <- read.csv("Data/clustered_pitches.csv")
 
-relief_pitchers <- read.csv("relief_pitchers.csv")
+relief_pitchers <- read.csv("Data/relief_pitchers.csv")
 
 starting_pitchers <- setdiff(select(all_pitchers, -clusters), relief_pitchers)
 
