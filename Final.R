@@ -3,7 +3,6 @@ library(RPostgres)
 library(RSQLite)
 library(tidyverse)
 library(xgboost)
-library(shapr)
 
 conn <- dbConnect(Postgres(), dbname = "drpstatcast", host = "localhost",
                   port = 5432, user = "postgres", password = "drppassword")

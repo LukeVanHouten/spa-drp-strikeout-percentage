@@ -176,7 +176,7 @@ delete_and_upload <- function(df,
 # rm(df)
 # gc()
 
-map(.x = seq(2015, 2019, 1), 
+map(.x = seq(2015, 2021, 1), 
     ~{payload_statcast <- annual_statcast_query(season = .x)
     
     message(paste0('Formatting payload for ', .x, '...'))
