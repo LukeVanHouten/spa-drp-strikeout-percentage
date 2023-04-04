@@ -19,11 +19,11 @@ The data should be between 2015 and 2021. I ommitted 2020 data in my original an
 
 ## Running the Model
 
-Simply hit the source button in RStudio to run `final.R` for the model. It will create numerous dataframes for the different subsets of data used, the model with the lowest mean absolute error as well as relevant information for it, and dataframes and a chart detailing feature importance. To plot the distribution of the number of pitch clusters between starters and relievers, run the `clusters_plot.R` file. The rest of the helper scripts provide .csv files that have already been created, and thus do not need to be ran.
+Simply hit the source button in RStudio for `final.R` to run the model. It will create numerous dataframes for the different subsets of data used, return the model with the lowest mean absolute error as well as relevant information for it, and create dataframes and a chart detailing feature importance. To plot the distribution of the number of pitch clusters between starters and relievers, run the `clusters_plot.R` file. Many of the plots created by the model and helper functions can be found in the presentation in the repository. The rest of the helper scripts provide .csv files that have already been created, and thus do not need to be ran.
 
 ## Article
 
-I wrote a lengthy article about this project on Medium. The article can be found [here](https://medium.com/).
+I wrote a lengthy article about this project on Medium. The article can be found [here](https://medium.com/@lukevh/predicting-reliever-strikeout-percentage-7c4e3c6fde88).
 
 ## To-Do
 
@@ -32,3 +32,9 @@ I wrote a lengthy article about this project on Medium. The article can be found
 - Fix position players pitching
 
 - Improve pitch clustering
+
+- Inline comment documentation
+
+## Acknowledgements
+
+I am very thankful for statistics PhD student Alex Bank for mentoring me on this project. Without his help I would not have been able to do this project. I am also very greatful for the UW SPA for accepting my application for the project and giving me the opportunity to complete it.
